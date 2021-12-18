@@ -8,6 +8,7 @@ Translate-Word
 전제 조건
 -------------
 ```
+python >= 3.7.9
 requests >= 2.26.0
 beautifulsoap4 >= 4.9.1
 ```
