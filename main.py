@@ -1,9 +1,12 @@
+from bs4.element import ResultSet
 import requests
 import time
 import asyncio
 from functools import partial
 from bs4 import BeautifulSoup
 import os
+
+from soupsieve import select
 
 progress:int = 0
 progress_init:int = 100
@@ -14,6 +17,8 @@ keywords:list = []
 keywords_init = 0
 success = 0
 error = 0
+start = 0
+end = 0
 
 async def analyze(url, keyword):  # 코루틴 정의
     global progress, saved_storage, count, error, success
@@ -21,7 +26,8 @@ async def analyze(url, keyword):  # 코루틴 정의
     cycle = 0
     isInexistCheck = False
     isInexistWord = False
-    selector:str = "#mArticle > div.search_cont > div:nth-child(3) > div:nth-child(2) > div.cleanword_type > ul.list_search > li > span.txt_search"
+    selector:str = "#content > div.en_dic_section.search_result.dic_en_entry > dl > dd:nth-child(2)"
+    # selector:str = "#mArticle > div.search_cont > div:nth-child(3) > div:nth-child(2) > div.cleanword_type > ul.list_search > li > span.txt_search"
     while not isSuccessful:
         # 요청 시작
         loop = asyncio.get_event_loop()
@@ -30,7 +36,8 @@ async def analyze(url, keyword):  # 코루틴 정의
         res = await loop.run_in_executor(None, request)
         soup = BeautifulSoup(res.text, 'html.parser')
         if not isInexistCheck:
-            isInexistWord = len(soup.select('strong.tit_info')) == 0
+            isInexistWord = len(soup.select('div#notfound')) == 0
+            # isInexistWord = len(soup.select('strong.tit_info')) == 0
             isInexistCheck = True
         # 재요청 여부
         if len(soup.select(selector)) == 0:
@@ -46,8 +53,13 @@ async def analyze(url, keyword):  # 코루틴 정의
                 print(f'{keyword} 실패, {progress:.3f}% 진행 ({count}/{count_init})')
                 return '데이터 없음'
         target_list =  []
-        for i in soup.select(selector):
-            target_list.append(i.text)
+        selective = soup.select(selector)
+        for i in selective:
+            select_str = i.text
+            select_str = select_str.replace('\t', '').replace('\r\n', '').replace('\r\n ', '').replace('  ', '')
+            select_str = select_str.replace('1.', '').replace('2.', ', ').replace('3.', ', ').replace('4.', ', ').strip()
+            target_list.append(select_str)
+        print(target_list)
         target_stringify = ', '.join([str(elem) for elem in target_list])
         # 응답
         isSuccessful = True
@@ -73,7 +85,9 @@ async def receive_input():
     count_init = keywords_init
 
 async def main():
-    base_url = 'https://dic.daum.net/search.do?q={keyword}'
+    global end
+    base_url = 'https://dict.naver.com/search.dict?dicQuery={keyword}'
+    # base_url = 'https://dic.daum.net/search.do?q={keyword}'
     os.system('cls')
     print("=====================================================")
     await receive_input()
@@ -81,6 +95,7 @@ async def main():
     futures = [asyncio.ensure_future(analyze(
         base_url.format(keyword=keyword), keyword)) for keyword in keywords]
     result = await asyncio.gather(*futures)
+    end = time.time()
     print("=====================================================")
     print("잠시만 기다려주세요.. ")
     isNewlinePrint = input("결과를 줄바꿈하실건가요? (기본값 y, y/n) >>> ")
@@ -102,6 +117,7 @@ if __name__ == "__main__":
         loop.run_until_complete(main())
     except KeyboardInterrupt:
         loop.stop()
+        end = time.time()
         print("=====================================================")
         print("잠시만 기다려주세요.. ")
         saved_storage = dict(sorted(saved_storage.items()))
@@ -125,6 +141,6 @@ if __name__ == "__main__":
             else:
                 print(i, end=", ")
         print("=====================================================")
-    end = time.time()
     print(f'[성공: {success}, 실패: {error}, 미반환: {len(keywords)}], 총계: {keywords_init}')
     print(f'{end-start:.4f}초 소요됨')
+    os.system('pause')
